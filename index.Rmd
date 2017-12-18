@@ -1,0 +1,25 @@
+---
+title: "IODS course project"
+author: "Himanshu Chheda"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_depth: 2
+    fig_caption: true
+    fig_width: 6
+    fig_height: 4
+    code_folding: hide
+---
+
+
+
+# Project work for Introduction to Open Data Science Course Dec 2017
+### Author: Himanshu Chheda
+##### himanshu.chheda@helsinki.fi
+##### Date: 18.12.2017
+
+[Github: himanshuchheda](https://github.com/himanshuchheda/IODS-project)
+
+```{r child = "final_project.Rmd"}
+```

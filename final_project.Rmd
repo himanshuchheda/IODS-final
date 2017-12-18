@@ -1,0 +1,133 @@
+# Project work for the IODS course
+
+## Objectives
+ - Perform logistic regression
+ - Perform linear discriminant analysis (LDA)
+ 
+## Abstract
+In this study, we use the student learning dataset. We perform 2 independent analyses, one involves performing logistic regression and the second analysis includes classification for which we perform LDA. Based upon our observations, for this dataset, the task of classification performs much better than logistic regression.
+
+
+> About the dataset
+
+In this study, I'll be working on the learning2014 dataset. Learning 2014 dataset is based upon student questionnaires. The students have answered to multiple questions related to surface, strategic and deep categories. We have averaged over all the questions from each set to score the individuals and give a final grading associated with each of these 3 categories. Furthermore, there is a score associated with the attitude of the students to statistics. Some phenotypic variables such as age and gender are also present. Finally the last variable is the points column which corresponds to the exam points for each student.
+
+> Reading in the dataset
+```{R}
+lrn14 <- read.table("~/Documents/GitHub/IODS-final/data/learning2014.txt", header = T, sep = "\t")
+dim(lrn14)
+str(lrn14)
+summary(lrn14)
+```
+
+* Understanding each of the variables
+    + **gender**: Refers to the gender of the students (Factor with 2 levels)
+    + **Age**: Age of the students (Integer values)
+    + **attitude**: Average points based on attitude of students towards statistics (Numeric values)
+    + **deep**: Average points for students based on deep questions (Numeric values)
+    + **stra**: Average points for students based on strategic questions (Numeric values)
+    + **surf**: Average points for students based on surface questions (Numeric values)
+    + **Points**: Exam points scored by each student (Integer values)
+    
+> Data exploration
+```{R}
+library(GGally) # Loading library for plotting
+library(ggplot2) # Loading library for plotting
+library(dplyr)
+library(MASS) # For LDA
+p <- ggpairs(lrn14, mapping = aes(col = gender, alpha = 0.3), lower = list(combo = wrap("facethist", bins = 20)))
+p
+```
+
+* While performing logistic regression, it is important to test for collinearity of variables as they can lead to overfitting. In order to avoid that, we will test the correlations between the variables. There seems to be a correlation between the Points variable and attitude. Since Points will eventually provide for a dependent variable/target variable, this shouldn't affect the results. Similarly, we see a negative correlation between all the various categories and surface questions. Also based on the boxplots above, it seems that men have a higher attitude towards statistics as compared to females.
+
+> Description of methods
+
+I will be performing logistic regression and LDA on this dataset. For this reason, I will consider an arbitary score of Points >=18 as Pass and <18 as fail. I will try to come up with a model to explain the features associated with passing and failing of students. Furthermore, I will perform LDA. For LDA we need classes and for this we consider Points >=25 as good students, 21>Points>=25 as intermediate students and Points < 21 as average students
+
+##Logistic Regression
+> Creating variables for Log regression
+```{R}
+lrn14$Pass <- ifelse(lrn14$Points>=18,1,0)
+table(lrn14$Pass)
+```
+
+
+As can be seen from the above table, based on our random cutoff, we have 140 students who have passed the exam and 26 that have failed. Let's see if the variables explain this classification and if we can correctly predict the individuals who will fail.
+
+```{R}
+model_log_reg <- glm(Pass~Age + attitude + deep + stra + surf, data = lrn14, family = "binomial")
+summary(model_log_reg)
+OR <- exp(coef(model_log_reg))
+CI <- exp(confint(model_log_reg))
+cbind(OR, CI)
+```
+
+So now we do have the results for the logistic regression from glm. Only attitude and Age seem to be significantly associated with the Pass/Fail status. As can be seen from the odds ratios, for every 1 point increase in attitude, there's a 2.55 likelihood that the student may pass. Inversely, for every year increase in age, there is 0.95 chance the student may fail.
+
+> Testing the predictive power of the model
+```{R}
+probabilities <- predict(model_log_reg, type = "response")
+lrn14 <- mutate(lrn14, probability = probabilities)
+lrn14 <- mutate(lrn14, prediction = probability > 0.5)
+table(Results = lrn14$Pass, prediction = lrn14$prediction) %>% prop.table()
+g <- ggplot(lrn14, aes(x = probability, y = Pass, col = prediction))
+g + geom_point()
+```
+
+As can be seen from the plot and the table, this model is heavily biased trying to pass all the students. Only one student who failed was correctly identified by the model. The accuracy is ~85% however with a very high false positive rate. 
+
+##Linear Discriminant Analysis (LDA)
+> Creating variables for LDA
+```{R}
+bins <- quantile(lrn14$Points, c(0,0.33,0.67,1))
+performance <- cut(lrn14$Points, breaks = bins, include.lowest = TRUE, labels = c("poor", "intermediate", "good"))
+table(performance)
+#lrn14 <- select(lrn14, -c(Points, probability, prediction, Pass))
+lrn14 <- data.frame(lrn14,performance)
+```
+
+Hence we have created a categorical variable for student performance. We have 68 average students, 45 intermediate students and 53 good students.
+
+> Dividing the dataset into train and test
+```{R}
+n <- nrow(lrn14)
+ind <- sample(n,  size = n * 0.8)
+train <- lrn14[ind,]
+test <- lrn14[-ind,]
+correct_classes <- test$performance
+test$performance <- NULL
+```
+
+We use 80% of the data as the training dataset.
+
+> Fitting LDA
+```{R}
+lda.fit <- lda(performance ~ ., data = train)
+lda.fit
+
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+classes <- as.numeric(train$performance)
+plot(lda.fit, dimen = 2, col = classes, pch = classes)
+lda.arrows(lda.fit, myscale = 1)
+```
+
+Performing LDA on the training dataset. Seems like the model fits the data very well based upon the plot.
+
+> Predictive power of the LDA
+```{R}
+lda.pred <- predict(lda.fit, newdata = test)
+table(correct = correct_classes, predicted = lda.pred$class)
+```
+
+LDA predicts most individuals correctly.
+
+##Conclusion and Discussion
+I present here 2 approaches for analyzing the data. Based upon the task of classification one could either go with LDA and for regression perform logistic regression. The logistic regression model in this case is overfitted and predicts 99% of the students to pass. At the same time, LDA does a near perfect job classifying the individuals in 3 student classes.
